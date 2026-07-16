@@ -11,6 +11,8 @@ document.addEventListener("DOMContentLoaded", () => {
     initTheme();
     initEventListeners();
     checkPersistentAuthStatus();
+    ...
+});
     
     setTimeout(() => {
         const loader = document.getElementById("loader");
