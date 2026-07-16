@@ -11,6 +11,20 @@ document.addEventListener("DOMContentLoaded", () => {
     initTheme();
     initEventListeners();
     checkPersistentAuthStatus();
+
+    setTimeout(() => {
+        const loader = document.getElementById("loader");
+        loader.style.opacity = "0";
+        loader.style.transition = "opacity 0.5s ease";
+
+        setTimeout(() => {
+            loader.classList.add("hidden");
+            document.querySelectorAll(".shape").forEach(shape => {
+                shape.classList.add("show");
+            });
+        }, 500);
+    }, 600);
+});
     
     setTimeout(() => {
         const loader = document.getElementById("loader");
