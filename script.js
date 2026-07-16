@@ -1,4 +1,3 @@
-
 const CONFIG = {
     departments: ["CSE", "IT", "ECE", "EE", "ME", "CE"],
     subjects: {
@@ -7,40 +6,34 @@ const CONFIG = {
     }
 };
 
-document.addEventListener("DOMContentLoaded", () => {
-    initTheme();
-    initEventListeners();
-    checkPersistentAuthStatus();
-    
-    setTimeout(() => {
-        const loader = document.getElementById("loader");
-        loader.style.opacity = "0";
-        loader.style.transition = "opacity 0.5s ease";
-        
-        setTimeout(() => {
-            loader.classList.add("hidden");
-            
-            document.querySelectorAll(".shape").forEach(shape => {
-                shape.classList.add("show");
-            });
-        }, 500);
-    }, 600);
-});
 let appState = {
     currentDept: "",
     currentSem: "",
     activeResourceCategory: "" // 'notes', 'pyqs', 'organizers'
 };
 
-
+// BUGFIX: There used to be TWO separate DOMContentLoaded listeners here, both
+// calling initEventListeners(). That attached every click handler (including
+// the FAQ question handler and the hamburger menu handler) TWICE, so a single
+// click toggled the "open" class on and then immediately back off again -
+// which is why the FAQ answers never appeared. Merged into a single listener.
 document.addEventListener("DOMContentLoaded", () => {
     initTheme();
     initEventListeners();
     checkPersistentAuthStatus();
-    
 
     setTimeout(() => {
-        document.getElementById("loader").classList.add("hidden");
+        const loader = document.getElementById("loader");
+        loader.style.opacity = "0";
+        loader.style.transition = "opacity 0.5s ease";
+
+        setTimeout(() => {
+            loader.classList.add("hidden");
+
+            document.querySelectorAll(".shape").forEach(shape => {
+                shape.classList.add("show");
+            });
+        }, 500);
     }, 600);
 });
 
@@ -85,7 +78,7 @@ function initEventListeners() {
 
     document.querySelectorAll("#dept-grid .select-card").forEach(card => {
     card.addEventListener("click", (e) => {
-
+        console.log("Departmentclicked");
         appState.currentDept = card.getAttribute("data-dept") || card.closest(".select-card").getAttribute("data-dept");
         showToast(`Department set to ${appState.currentDept}`, "info");
         navigateTo("sem-view");
