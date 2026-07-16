@@ -12,11 +12,6 @@ let appState = {
     activeResourceCategory: "" // 'notes', 'pyqs', 'organizers'
 };
 
-// BUGFIX: There used to be TWO separate DOMContentLoaded listeners here, both
-// calling initEventListeners(). That attached every click handler (including
-// the FAQ question handler and the hamburger menu handler) TWICE, so a single
-// click toggled the "open" class on and then immediately back off again -
-// which is why the FAQ answers never appeared. Merged into a single listener.
 document.addEventListener("DOMContentLoaded", () => {
     initTheme();
     initEventListeners();
