@@ -112,7 +112,7 @@ function initializeGoogleSignIn() {
 
     google.accounts.id.initialize({
 
-        client_id: "YOUR_GOOGLE_CLIENT_ID",
+        client_id:  "611539225489-e1lc5hfodtp06sdro3s45dscnqprdgaj.apps.googleusercontent.com",
 
         callback: handleCredentialResponse
 
