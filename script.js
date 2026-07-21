@@ -1,399 +1,2224 @@
+/*==========================================================
+                SemesterX Frontend
+        Google OAuth + Spring Boot + JWT
+==========================================================*/
+
+/*==========================================================
+                    CONFIGURATION
+==========================================================*/
+
+const BACKEND_URL = "http://localhost:8081";
+
 const CONFIG = {
-    departments: ["CSE", "IT", "ECE", "EE", "ME", "CE"],
-    subjects: {
-        sem1: ["Mathematics", "Physics", "Chemistry", "Electrical Engineering"],
-        sem2: ["Mathematics", "Chemistry", "Physics", "PPS", "English"]
-    }
+
+    departments: [],
+
+    semesters: [],
+
+    subjects: {}
+
 };
+
+
+/*==========================================================
+                    APPLICATION STATE
+==========================================================*/
 
 let appState = {
+
     currentDept: "",
+
     currentSem: "",
-    activeResourceCategory: "" // 'notes', 'pyqs', 'organizers'
+
+    activeResourceCategory: ""
+
 };
 
+let postAuthRedirectActionCallback = null;
+
+
+/*==========================================================
+                    APPLICATION START
+==========================================================*/
+
 document.addEventListener("DOMContentLoaded", () => {
+
+    initializeApplication();
+
+});
+
+
+async function initializeApplication() {
+
     initTheme();
+
     initEventListeners();
+
+    initializeGoogleSignIn();
+
     checkPersistentAuthStatus();
 
+    startLoaderAnimation();
+
+}
+
+
+/*==========================================================
+                    LOADER
+==========================================================*/
+
+function startLoaderAnimation() {
+
     setTimeout(() => {
+
         const loader = document.getElementById("loader");
+
+        if (!loader) return;
+
         loader.style.opacity = "0";
-        loader.style.transition = "opacity 0.5s ease";
+
+        loader.style.transition = "0.5s";
 
         setTimeout(() => {
+
             loader.classList.add("hidden");
 
             document.querySelectorAll(".shape").forEach(shape => {
-                shape.classList.add("show");
-            });
-        }, 500);
-    }, 600);
-});
 
+                shape.classList.add("show");
+
+            });
+
+        }, 500);
+
+    }, 600);
+
+}
+
+
+/*==========================================================
+                    GOOGLE LOGIN
+==========================================================*/
+
+function initializeGoogleSignIn() {
+
+    if (!window.google) {
+
+        console.error("Google Identity Services not loaded");
+
+        return;
+
+    }
+
+    google.accounts.id.initialize({
+
+        client_id: "YOUR_GOOGLE_CLIENT_ID",
+
+        callback: handleCredentialResponse
+
+    });
+
+    const googleButton = document.getElementById("google-signin-button");
+
+    if (googleButton) {
+
+        google.accounts.id.renderButton(
+
+            googleButton,
+
+            {
+
+                theme: "filled_blue",
+
+                size: "large",
+
+                shape: "pill",
+
+                width: 280,
+
+                text: "continue_with"
+
+            }
+
+        );
+
+    }
+
+}
+
+
+/*==========================================================
+                    GOOGLE CALLBACK
+==========================================================*/
+
+async function handleCredentialResponse(response) {
+
+    try {
+
+        const result = await fetch(
+
+            BACKEND_URL + "/api/auth/google",
+
+            {
+
+                method: "POST",
+
+                headers: {
+
+                    "Content-Type": "application/json"
+
+                },
+
+                body: JSON.stringify({
+
+                    idToken: response.credential
+
+                })
+
+            }
+
+        );
+
+        if (!result.ok) {
+
+            throw new Error("Authentication Failed");
+
+        }
+
+        const data = await result.json();
+
+        localStorage.setItem("jwt", data.token);
+
+        localStorage.setItem(
+
+            "user",
+
+            JSON.stringify(data)
+
+        );
+
+        showToast(
+
+            "Welcome " + data.name,
+
+            "success"
+
+        );
+
+        closeAuthModal();
+
+        checkPersistentAuthStatus();
+
+        if (postAuthRedirectActionCallback != null) {
+
+            postAuthRedirectActionCallback();
+
+            postAuthRedirectActionCallback = null;
+
+        }
+
+    }
+
+    catch (error) {
+
+        console.error(error);
+
+        showToast(
+
+            "Google Login Failed",
+
+            "error"
+
+        );
+
+    }
+
+}
+
+
+/*==========================================================
+                    JWT HELPERS
+==========================================================*/
+
+function getJwt() {
+
+    return localStorage.getItem("jwt");
+
+}
+
+
+function getCurrentUser() {
+
+    const user = localStorage.getItem("user");
+
+    if (!user) {
+
+        return null;
+
+    }
+
+    return JSON.parse(user);
+
+}
+
+
+function isLoggedIn() {
+
+    return getJwt() !== null;
+
+}
+
+
+/*==========================================================
+                    LOGOUT
+==========================================================*/
+
+function logout() {
+
+    localStorage.removeItem("jwt");
+
+    localStorage.removeItem("user");
+
+    if (window.google) {
+
+        google.accounts.id.disableAutoSelect();
+
+    }
+
+    checkPersistentAuthStatus();
+
+    navigateTo("landing-view");
+
+    showToast(
+
+        "Logged Out Successfully",
+
+        "info"
+
+    );
+
+}
+/*==========================================================
+                    NAVIGATION
+==========================================================*/
 
 function navigateTo(viewId) {
 
     document.querySelectorAll(".view").forEach(view => {
+
         view.classList.remove("active");
+
     });
-    
 
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({
 
+        top: 0,
+
+        behavior: "smooth"
+
+    });
 
     const targetView = document.getElementById(viewId);
+
     if (targetView) {
+
         targetView.classList.add("active");
+
     }
 
-    if (viewId === 'dashboard-view') {
-        document.getElementById("dash-dept-lbl").textContent = appState.currentDept;
-        document.getElementById("dash-sem-lbl").textContent = appState.currentSem;
+    if (viewId === "dashboard-view") {
+
+        document.getElementById("dash-dept-lbl").textContent =
+            appState.currentDept;
+
+        document.getElementById("dash-sem-lbl").textContent =
+            appState.currentSem;
+
     }
-    if (viewId === 'mentorship-view') {
+
+    if (viewId === "mentorship-view") {
+
         renderMentorshipPricingCard();
+
     }
 
+    const nav = document.getElementById("nav-links");
 
-    document.getElementById("nav-links").classList.remove("open");
+    if (nav) {
+
+        nav.classList.remove("open");
+
+    }
+
 }
 
+
+/*==========================================================
+                    EVENT LISTENERS
+==========================================================*/
 
 function initEventListeners() {
 
-    document.getElementById("hamburger").addEventListener("click", () => {
-        document.getElementById("nav-links").classList.toggle("open");
-    });
+    initializeNavbar();
 
+    initializeThemeToggle();
 
-    document.getElementById("theme-toggle").addEventListener("click", toggleTheme);
+    initializeDepartmentCards();
 
+    initializeSemesterCards();
 
-    document.querySelectorAll("#dept-grid .select-card").forEach(card => {
-    card.addEventListener("click", (e) => {
-        console.log("Departmentclicked");
-        appState.currentDept = card.getAttribute("data-dept") || card.closest(".select-card").getAttribute("data-dept");
-        showToast(`Department set to ${appState.currentDept}`, "info");
-        navigateTo("sem-view");
-    });
-});
+    initializeSearch();
 
+    initializeFAQ();
 
-    document.querySelectorAll(".sem-card").forEach(card => {
-        card.addEventListener("click", () => {
-            appState.currentSem = card.getAttribute("data-sem");
-            showToast(`Semester ${appState.currentSem} Activated`, "info");
-            navigateTo("dashboard-view");
-        });
-    });
+    initializeBackToTop();
 
-
-    document.getElementById("resource-search").addEventListener("input", (e) => {
-        filterSubjectCards(e.target.value.trim());
-    });
-
-
-const faqQuestions = document.querySelectorAll(".faq-question");
-if (faqQuestions.length > 0) {
-    faqQuestions.forEach(item => {
-        item.addEventListener("click", (e) => {
-            // Stop any parent event bubbles
-            e.stopPropagation();
-            
-            const parent = item.parentElement;
-            
-            // Optional: Close other open FAQs when a new one is clicked
-            document.querySelectorAll(".faq-item").forEach(el => {
-                if (el !== parent) el.classList.remove("open");
-            });
-
-            // Toggle the current one
-            parent.classList.toggle("open");
-        });
-    });
 }
 
-    window.addEventListener("scroll", () => {
-        const btt = document.getElementById("back-to-top");
-        if (window.scrollY > 400) {
-            btt.classList.add("show");
-        } else {
-            btt.classList.remove("show");
-        }
-    });
-    document.getElementById("back-to-top").addEventListener("click", () => {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
+
+/*==========================================================
+                    NAVBAR
+==========================================================*/
+
+function initializeNavbar() {
+
+    const hamburger = document.getElementById("hamburger");
+
+    if (hamburger) {
+
+        hamburger.addEventListener("click", () => {
+
+            document
+                .getElementById("nav-links")
+                .classList
+                .toggle("open");
+
+        });
+
+    }
+
 }
 
+
+/*==========================================================
+                    THEME
+==========================================================*/
 
 function initTheme() {
-    const savedTheme = localStorage.getItem("theme") || "light";
-    document.documentElement.setAttribute("data-theme", savedTheme);
-    updateThemeIcon(savedTheme);
+
+    const theme =
+
+        localStorage.getItem("theme") || "light";
+
+    document.documentElement.setAttribute(
+
+        "data-theme",
+
+        theme
+
+    );
+
+    updateThemeIcon(theme);
+
 }
+
+
+function initializeThemeToggle() {
+
+    const toggle =
+
+        document.getElementById("theme-toggle");
+
+    if (!toggle) return;
+
+    toggle.addEventListener(
+
+        "click",
+
+        toggleTheme
+
+    );
+
+}
+
 
 function toggleTheme() {
-    let currentTheme = document.documentElement.getAttribute("data-theme");
-    let newTheme = currentTheme === "dark" ? "light" : "dark";
-    document.documentElement.setAttribute("data-theme", newTheme);
-    localStorage.setItem("theme", newTheme);
-    updateThemeIcon(newTheme);
-    showToast(`Switched to ${newTheme} mode`, "info");
+
+    const current =
+
+        document.documentElement.getAttribute(
+
+            "data-theme"
+
+        );
+
+    const next =
+
+        current === "dark"
+
+            ? "light"
+
+            : "dark";
+
+    document.documentElement.setAttribute(
+
+        "data-theme",
+
+        next
+
+    );
+
+    localStorage.setItem(
+
+        "theme",
+
+        next
+
+    );
+
+    updateThemeIcon(next);
+
 }
+
 
 function updateThemeIcon(theme) {
-    const icon = document.querySelector("#theme-toggle i");
-    if(theme === "dark") {
-        icon.className = "fa-solid fa-sun";
-    } else {
-        icon.className = "fa-solid fa-moon";
+
+    const icon =
+
+        document.querySelector(
+
+            "#theme-toggle i"
+
+        );
+
+    if (!icon) return;
+
+    if (theme === "dark") {
+
+        icon.className =
+
+            "fa-solid fa-sun";
+
     }
+
+    else {
+
+        icon.className =
+
+            "fa-solid fa-moon";
+
+    }
+
 }
 
 
-function checkIsUserAuthenticated() {
-    return localStorage.getItem("isLoggedIn") === "true";
+/*==========================================================
+                    DEPARTMENT
+==========================================================*/
+
+function initializeDepartmentCards() {
+
+    document
+
+        .querySelectorAll("#dept-grid .select-card")
+
+        .forEach(card => {
+
+            card.addEventListener("click", () => {
+
+                appState.currentDept =
+
+                    card.dataset.dept;
+
+                showToast(
+
+                    "Department : " +
+
+                    appState.currentDept,
+
+                    "info"
+
+                );
+
+                navigateTo("sem-view");
+
+            });
+
+        });
+
 }
+
+
+/*==========================================================
+                    SEMESTER
+==========================================================*/
+
+function initializeSemesterCards() {
+
+    document
+
+        .querySelectorAll(".sem-card")
+
+        .forEach(card => {
+
+            card.addEventListener("click", () => {
+
+                appState.currentSem =
+
+                    card.dataset.sem;
+
+                showToast(
+
+                    "Semester " +
+
+                    appState.currentSem +
+
+                    " Selected",
+
+                    "success"
+
+                );
+
+                navigateTo(
+
+                    "dashboard-view"
+
+                );
+
+            });
+
+        });
+
+}
+
+
+/*==========================================================
+                    SEARCH
+==========================================================*/
+
+function initializeSearch() {
+
+    const search =
+
+        document.getElementById(
+
+            "resource-search"
+
+        );
+
+    if (!search) return;
+
+    search.addEventListener(
+
+        "input",
+
+        e => {
+
+            filterSubjectCards(
+
+                e.target.value.trim()
+
+            );
+
+        }
+
+    );
+
+}
+
+
+/*==========================================================
+                    FAQ
+==========================================================*/
+
+function initializeFAQ() {
+
+    document
+
+        .querySelectorAll(".faq-question")
+
+        .forEach(item => {
+
+            item.addEventListener(
+
+                "click",
+
+                () => {
+
+                    const parent =
+
+                        item.parentElement;
+
+                    document
+
+                        .querySelectorAll(".faq-item")
+
+                        .forEach(faq => {
+
+                            if (faq !== parent) {
+
+                                faq.classList.remove(
+
+                                    "open"
+
+                                );
+
+                            }
+
+                        });
+
+                    parent.classList.toggle(
+
+                        "open"
+
+                    );
+
+                }
+
+            );
+
+        });
+
+}
+
+
+/*==========================================================
+                BACK TO TOP
+==========================================================*/
+
+function initializeBackToTop() {
+
+    const button =
+
+        document.getElementById(
+
+            "back-to-top"
+
+        );
+
+    if (!button) return;
+
+    window.addEventListener(
+
+        "scroll",
+
+        () => {
+
+            if (window.scrollY > 400) {
+
+                button.classList.add("show");
+
+            }
+
+            else {
+
+                button.classList.remove("show");
+
+            }
+
+        }
+
+    );
+
+    button.addEventListener(
+
+        "click",
+
+        () => {
+
+            window.scrollTo({
+
+                top: 0,
+
+                behavior: "smooth"
+
+            });
+
+        }
+
+    );
+
+}
+/*==========================================================
+                AUTHENTICATION STATUS
+==========================================================*/
 
 function checkPersistentAuthStatus() {
+
     const authBtn = document.getElementById("auth-nav-btn");
-    if (checkIsUserAuthenticated()) {
-        authBtn.textContent = "Logout";
+
+    if (!authBtn) return;
+
+    if (isLoggedIn()) {
+
+        const user = getCurrentUser();
+
+        authBtn.innerHTML =
+            '<i class="fa-solid fa-right-from-bracket"></i> Logout';
+
         authBtn.className = "btn btn-secondary";
-    } else {
-        authBtn.textContent = "Login";
-        authBtn.className = "btn btn-outline";
+
+        if (user) {
+
+            console.log("Logged In User:", user.email);
+
+        }
+
     }
+
+    else {
+
+        authBtn.innerHTML = "Login";
+
+        authBtn.className = "btn btn-outline";
+
+    }
+
 }
+
+
+/*==========================================================
+                NAVBAR LOGIN BUTTON
+==========================================================*/
 
 function handleNavbarAuthClick() {
-    if (checkIsUserAuthenticated()) {
-        localStorage.removeItem("isLoggedIn");
-        showToast("Logged out successfully", "info");
-        checkPersistentAuthStatus();
-        navigateTo("landing-view");
-    } else {
-        openAuthModal();
+
+    if (isLoggedIn()) {
+
+        logout();
+
+        return;
+
     }
+
+    openAuthModal();
+
 }
 
 
-let postAuthRedirectActionCallback = null;
+/*==========================================================
+                    LOGIN REQUIRED
+==========================================================*/
+
+function requireLogin(action) {
+
+    if (isLoggedIn()) {
+
+        action();
+
+        return;
+
+    }
+
+    postAuthRedirectActionCallback = action;
+
+    openAuthModal();
+
+}
+
+
+/*==========================================================
+                AUTH MODAL
+==========================================================*/
+
+function openAuthModal() {
+
+    const modal = document.getElementById("auth-modal");
+
+    if (modal) {
+
+        modal.classList.add("open");
+
+    }
+
+}
+
+
+function closeAuthModal() {
+
+    const modal = document.getElementById("auth-modal");
+
+    if (modal) {
+
+        modal.classList.remove("open");
+
+    }
+
+}
+
+
+/*==========================================================
+                PAYMENT MODAL
+==========================================================*/
+
+function openPaymentModal() {
+
+    const modal = document.getElementById("payment-modal");
+
+    if (modal) {
+
+        modal.classList.add("open");
+
+    }
+
+}
+
+
+function closePaymentModal() {
+
+    const modal = document.getElementById("payment-modal");
+
+    if (modal) {
+
+        modal.classList.remove("open");
+
+    }
+
+}
+
+
+/*==========================================================
+                DASHBOARD ACTIONS
+==========================================================*/
 
 function handleDashboardResource(category) {
+
     appState.activeResourceCategory = category;
-    
-    if (category === 'mentorship') {
+
+    if (category === "mentorship") {
+
         navigateTo("mentorship-view");
+
         return;
+
     }
 
-    if (!checkIsUserAuthenticated()) {
-        postAuthRedirectActionCallback = () => { loadResourceViewLayout(category); };
-        openAuthModal();
-    } else {
+    requireLogin(() => {
+
         loadResourceViewLayout(category);
-    }
+
+    });
+
 }
 
 
-function openAuthModal() { document.getElementById("auth-modal").classList.add("open"); }
-function closeAuthModal() { document.getElementById("auth-modal").classList.remove("open"); }
-function openPaymentModal() { document.getElementById("payment-modal").classList.add("open"); }
-function closePaymentModal() { document.getElementById("payment-modal").classList.remove("open"); }
+/*==========================================================
+                    API HELPERS
+==========================================================*/
 
-function simulateGoogleLogin() {
- 
-    const loginBtn = document.querySelector(".google-login-btn");
-    loginBtn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Connecting...`;
-    
-    setTimeout(() => {
-        localStorage.setItem("isLoggedIn", "true");
-        checkPersistentAuthStatus();
-        closeAuthModal();
-        showToast("Authenticated via Google Successfully", "success");
-        
+function getAuthHeaders() {
 
-        loginBtn.innerHTML = `<img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google Logo"> <span>Continue with Google</span>`;
-        
-        if (postAuthRedirectActionCallback) {
-            postAuthRedirectActionCallback();
-            postAuthRedirectActionCallback = null;
+    return {
+
+        "Authorization":
+            "Bearer " + getJwt(),
+
+        "Content-Type":
+            "application/json"
+
+    };
+
+}
+
+
+/*==========================================================
+                    GET REQUEST
+==========================================================*/
+
+async function apiGet(endpoint) {
+
+    const response = await fetch(
+
+        BACKEND_URL + endpoint,
+
+        {
+
+            method: "GET",
+
+            headers: getAuthHeaders()
+
         }
-    }, 1200);
+
+    );
+
+    if (response.status === 401) {
+
+        logout();
+
+        throw new Error("Unauthorized");
+
+    }
+
+    if (!response.ok) {
+
+        throw new Error(
+
+            "Server Error"
+
+        );
+
+    }
+
+    return await response.json();
+
 }
 
-// --- DYNAMIC RENDERING COMPONENT ENGINES ---
+
+/*==========================================================
+                    POST REQUEST
+==========================================================*/
+
+async function apiPost(endpoint, body) {
+
+    const response = await fetch(
+
+        BACKEND_URL + endpoint,
+
+        {
+
+            method: "POST",
+
+            headers: getAuthHeaders(),
+
+            body: JSON.stringify(body)
+
+        }
+
+    );
+
+    if (response.status === 401) {
+
+        logout();
+
+        throw new Error("Unauthorized");
+
+    }
+
+    if (!response.ok) {
+
+        throw new Error(
+
+            "Server Error"
+
+        );
+
+    }
+
+    return await response.json();
+
+}
+
+
+/*==========================================================
+                    PUT REQUEST
+==========================================================*/
+
+async function apiPut(endpoint, body) {
+
+    const response = await fetch(
+
+        BACKEND_URL + endpoint,
+
+        {
+
+            method: "PUT",
+
+            headers: getAuthHeaders(),
+
+            body: JSON.stringify(body)
+
+        }
+
+    );
+
+    if (!response.ok) {
+
+        throw new Error(
+
+            "Update Failed"
+
+        );
+
+    }
+
+    return await response.json();
+
+}
+
+
+/*==========================================================
+                    DELETE REQUEST
+==========================================================*/
+
+async function apiDelete(endpoint) {
+
+    const response = await fetch(
+
+        BACKEND_URL + endpoint,
+
+        {
+
+            method: "DELETE",
+
+            headers: getAuthHeaders()
+
+        }
+
+    );
+
+    if (!response.ok) {
+
+        throw new Error(
+
+            "Delete Failed"
+
+        );
+
+    }
+
+    return await response.json();
+
+}
+
+
+/*==========================================================
+                BACKEND CONNECTION TEST
+==========================================================*/
+
+async function testBackendConnection() {
+
+    try {
+
+        const response = await apiGet(
+
+            "/api/test"
+
+        );
+
+        console.log(response);
+
+    }
+
+    catch (error) {
+
+        console.error(error);
+
+    }
+
+}
+/*==========================================================
+                RESOURCE VIEW LOADER
+==========================================================*/
+
 function loadResourceViewLayout(category) {
+
     const titleMap = {
-        notes: "📚 Verified Lecture Notes",
-        pyqs: "📝 Previous Year Questions (PYQs)",
-        organizers: "📂 Core Syllabus Organizers"
-    };
-    
-    const descMap = {
-        notes: "Highly organized academic course blueprints designed for deep exam preparation scaling.",
-        pyqs: "Meticulously aggregated question bank sequences targeting strict structural curriculum benchmarks.",
-        organizers: "Aggregated layout outlines, immediate structural reference maps, and formula guides."
+
+        notes: "📚 Verified Notes",
+
+        pyqs: "📝 Previous Year Questions",
+
+        organizers: "📂 Course Organizers"
+
     };
 
-    document.getElementById("resource-view-title").textContent = titleMap[category];
-    document.getElementById("resource-view-desc").textContent = descMap[category];
-    document.getElementById("resource-search").value = ""; // clear previous filter states
+    const descMap = {
+
+        notes:
+            "High quality verified study materials.",
+
+        pyqs:
+            "University previous year questions.",
+
+        organizers:
+            "Mindmaps, formulas and revision sheets."
+
+    };
+
+    document.getElementById(
+        "resource-view-title"
+    ).textContent = titleMap[category];
+
+    document.getElementById(
+        "resource-view-desc"
+    ).textContent = descMap[category];
+
+    document.getElementById(
+        "resource-search"
+    ).value = "";
 
     renderSubjectResourceCards();
+
     navigateTo("resource-view");
+
 }
+
+
+/*==========================================================
+                SUBJECT CARDS
+==========================================================*/
 
 function renderSubjectResourceCards() {
-    const container = document.getElementById("resources-cards-grid");
-    container.innerHTML = ""; // clear frame buffers
-    
-    const semesterKey = `sem${appState.currentSem}`;
-    const trackingSubjects = CONFIG.subjects[semesterKey] || [];
-    const cat = appState.activeResourceCategory;
 
-    trackingSubjects.forEach(subject => {
-        const card = document.createElement("div");
-        card.className = "subject-resource-card";
-        card.setAttribute("data-subject-name", subject.toLowerCase());
+    const container =
+        document.getElementById(
+            "resources-cards-grid"
+        );
 
-        let internalActionUI = "";
-        
-        if (cat === 'notes') {
-            internalActionUI = `
-                <div class="resource-action-list">
-                    <button class="btn btn-primary btn-sm btn-full" onclick="showToast('Opening ${subject} notes viewer...','info')"><i class="fa-solid fa-eye"></i> View Notes</button>
-                    <button class="btn btn-secondary btn-sm btn-full" onclick="showToast('Downloading ${subject} documentation PDF...','success')"><i class="fa-solid fa-download"></i> Download PDF</button>
-                </div>`;
-        } else if (cat === 'pyqs') {
-            internalActionUI = `
-                <div class="resource-action-list">
-                    <button class="btn btn-primary btn-sm btn-full" onclick="showToast('Opening ${subject} parsed questions track...','info')"><i class="fa-solid fa-folder-open"></i> View PYQ Files</button>
-                    <button class="btn btn-secondary btn-sm btn-full" onclick="showToast('Downloading verified answers schema...','success')"><i class="fa-solid fa-cloud-arrow-down"></i> Download Solution</button>
-                </div>`;
-        } else if (cat === 'organizers') {
-            internalActionUI = `
-                <div class="resource-action-list">
-                    <button class="btn btn-outline btn-sm btn-full" onclick="showToast('Opening ${subject} revision guide...','info')"><i class="fa-solid fa-bolt"></i> Quick Revision Notes</button>
-                    <button class="btn btn-outline btn-sm btn-full" onclick="showToast('Opening ${subject} formulas blueprint...','info')"><i class="fa-solid fa-calculator"></i> Formula Sheets</button>
-                    <button class="btn btn-primary btn-sm btn-full" onclick="showToast('Launching Interactive Core Mindmap...','info')"><i class="fa-solid fa-diagram-project"></i> Open Organizer</button>
-                </div>`;
-        }
+    container.innerHTML = "";
 
-        card.innerHTML = `
-            <h3><i class="fa-solid fa-graduation-cap"></i> ${subject}</h3>
-            ${internalActionUI}
-        `;
-        container.appendChild(card);
-    });
-}
+    const semesterKey =
+        "sem" + appState.currentSem;
 
-function filterSubjectCards(query) {
-    const cleanerQuery = query.toLowerCase();
-    document.querySelectorAll(".subject-resource-card").forEach(card => {
-        const subjectName = card.getAttribute("data-subject-name");
-        if (subjectName.includes(cleanerQuery)) {
-            card.style.display = "block";
-        } else {
-            card.style.display = "none";
-        }
-    });
-}
+    const subjects =
+        CONFIG.subjects[semesterKey] || [];
 
-function checkIsPremiumUnlocked() {
-    return localStorage.getItem("isPremiumPaid") === "true";
-}
+    if (subjects.length === 0) {
 
-function renderMentorshipPricingCard() {
-    const container = document.getElementById("premium-pricing-box");
-    
-    if (checkIsPremiumUnlocked()) {
         container.innerHTML = `
-            <div class="success-box-animated">
-                <i class="fa-solid fa-circle-check text-success"></i>
-                <h3 style="margin-bottom:10px;">Mentorship Unlocked</h3>
-                <p style="margin-bottom:24px; color:var(--text-secondary);">Your elite workspace dashboard membership is active.</p>
-                <button class="btn btn-primary btn-full" onclick="showToast('Connecting to your assigned personal advisor channel...','info')">
-                    <i class="fa-solid fa-headset"></i> Enter Lounge Room
-                </button>
-            </div>
-        `;
-    } else {
-        container.innerHTML = `
-            <h4>Elite Track Tier</h4>
-            <div class="price-pill">₹59 <span class="term">/ One-Time</span></div>
-            <p>Accelerate structural target routines. Instant system processing setup deployment.</p>
-            <button class="btn btn-primary btn-full" onclick="handlePremiumUnlockIntent()"><i class="fa-solid fa-crown"></i> Unlock Now</button>
-        `;
-    }
-}
 
-function handlePremiumUnlockIntent() {
-    if (!checkIsUserAuthenticated()) {
-        postAuthRedirectActionCallback = () => { openPaymentModal(); };
-        openAuthModal();
-    } else {
-        openPaymentModal();
-    }
-}
+        <div class="empty-box">
 
-function simulatePaymentProcessing() {
-    const targetBody = document.getElementById("payment-gateway-body");
+            <h3>No Subjects Found</h3>
 
-    targetBody.innerHTML = `
-        <div style="text-align:center; padding: 20px 0;">
-            <div class="spinner" style="margin: 0 auto 16px auto;"></div>
-            <p style="font-size:13px; color:var(--text-secondary)">Contacting decentralized structural bank networks...</p>
+            <p>
+                Subjects will appear here after
+                connecting to the backend.
+            </p>
+
         </div>
+
+        `;
+
+        return;
+
+    }
+
+    subjects.forEach(subject => {
+
+        createSubjectCard(subject);
+
+    });
+
+}
+
+
+/*==========================================================
+            CREATE SUBJECT CARD
+==========================================================*/
+
+function createSubjectCard(subject) {
+
+    const container =
+        document.getElementById(
+            "resources-cards-grid"
+        );
+
+    const card =
+        document.createElement("div");
+
+    card.className =
+        "subject-resource-card";
+
+    card.dataset.subjectName =
+        subject.toLowerCase();
+
+    card.innerHTML = `
+
+        <h3>
+
+            <i class="fa-solid fa-book-open"></i>
+
+            ${subject}
+
+        </h3>
+
+        ${generateActionButtons(subject)}
+
     `;
 
-    setTimeout(() => {
-        localStorage.setItem("isPremiumPaid", "true");
-        showToast("Payment Processed Successfully", "success");
-        
-        targetBody.innerHTML = `
-            <div class="success-box-animated">
-                <i class="fa-solid fa-circle-check text-success"></i>
-                <h4>✅ Payment Successful</h4>
-                <p style="font-size:13px; color:var(--text-secondary); margin-top:6px;">Mentorship Unlocked</p>
+    container.appendChild(card);
+
+}
+
+
+/*==========================================================
+            ACTION BUTTONS
+==========================================================*/
+
+function generateActionButtons(subject){
+
+    switch(appState.activeResourceCategory){
+
+        case "notes":
+
+            return `
+
+            <div class="resource-action-list">
+
+                <button
+                    class="btn btn-primary btn-full"
+                    onclick="viewNotes('${subject}')">
+
+                    View Notes
+
+                </button>
+
+                <button
+                    class="btn btn-secondary btn-full"
+                    onclick="downloadNotes('${subject}')">
+
+                    Download PDF
+
+                </button>
+
             </div>
+
+            `;
+
+        case "pyqs":
+
+            return `
+
+            <div class="resource-action-list">
+
+                <button
+                    class="btn btn-primary btn-full"
+                    onclick="viewPYQs('${subject}')">
+
+                    View PYQs
+
+                </button>
+
+                <button
+                    class="btn btn-secondary btn-full"
+                    onclick="downloadPYQs('${subject}')">
+
+                    Download
+
+                </button>
+
+            </div>
+
+            `;
+
+        case "organizers":
+
+            return `
+
+            <div class="resource-action-list">
+
+                <button
+                    class="btn btn-primary btn-full"
+                    onclick="viewOrganizer('${subject}')">
+
+                    Open Organizer
+
+                </button>
+
+                <button
+                    class="btn btn-secondary btn-full"
+                    onclick="downloadOrganizer('${subject}')">
+
+                    Download
+
+                </button>
+
+            </div>
+
+            `;
+
+        default:
+
+            return "";
+
+    }
+
+}
+
+
+/*==========================================================
+                SEARCH FILTER
+==========================================================*/
+
+function filterSubjectCards(query){
+
+    const search =
+        query.toLowerCase();
+
+    document
+
+        .querySelectorAll(
+            ".subject-resource-card"
+        )
+
+        .forEach(card=>{
+
+            const subject =
+                card.dataset.subjectName;
+
+            card.style.display =
+                subject.includes(search)
+                ? "block"
+                : "none";
+
+        });
+
+}
+
+
+/*==========================================================
+                NOTES
+==========================================================*/
+
+async function viewNotes(subject){
+
+    try{
+
+        const notes =
+            await apiGet(
+
+                "/api/notes/"
+
+                + encodeURIComponent(subject)
+
+            );
+
+        console.log(notes);
+
+        showToast(
+
+            "Notes Loaded",
+
+            "success"
+
+        );
+
+    }
+
+    catch(error){
+
+        console.error(error);
+
+    }
+
+}
+
+
+function downloadNotes(subject){
+
+    window.open(
+
+        BACKEND_URL
+
+        +
+
+        "/api/notes/download/"
+
+        +
+
+        encodeURIComponent(subject),
+
+        "_blank"
+
+    );
+
+}
+
+
+/*==========================================================
+                PYQS
+==========================================================*/
+
+async function viewPYQs(subject){
+
+    try{
+
+        const pyqs =
+            await apiGet(
+
+                "/api/pyqs/"
+
+                +
+
+                encodeURIComponent(subject)
+
+            );
+
+        console.log(pyqs);
+
+        showToast(
+
+            "PYQs Loaded",
+
+            "success"
+
+        );
+
+    }
+
+    catch(error){
+
+        console.error(error);
+
+    }
+
+}
+
+
+function downloadPYQs(subject){
+
+    window.open(
+
+        BACKEND_URL
+
+        +
+
+        "/api/pyqs/download/"
+
+        +
+
+        encodeURIComponent(subject),
+
+        "_blank"
+
+    );
+
+}
+/*==========================================================
+                    ORGANIZERS
+==========================================================*/
+
+async function viewOrganizer(subject){
+
+    try{
+
+        const organizer = await apiGet(
+
+            "/api/organizers/" +
+
+            encodeURIComponent(subject)
+
+        );
+
+        console.log(organizer);
+
+        showToast(
+
+            "Organizer Loaded",
+
+            "success"
+
+        );
+
+    }
+
+    catch(error){
+
+        console.error(error);
+
+        showToast(
+
+            "Unable to load organizer",
+
+            "error"
+
+        );
+
+    }
+
+}
+
+
+function downloadOrganizer(subject){
+
+    window.open(
+
+        BACKEND_URL +
+
+        "/api/organizers/download/" +
+
+        encodeURIComponent(subject),
+
+        "_blank"
+
+    );
+
+}
+
+
+/*==========================================================
+                PREMIUM MEMBERSHIP
+==========================================================*/
+
+function isPremiumUser(){
+
+    const user = getCurrentUser();
+
+    if(!user) return false;
+
+    return user.role === "PREMIUM"
+
+        ||
+
+        localStorage.getItem("premium") === "true";
+
+}
+
+
+/*==========================================================
+            PREMIUM PAGE
+==========================================================*/
+
+function renderMentorshipPricingCard(){
+
+    const container =
+
+        document.getElementById(
+
+            "premium-pricing-box"
+
+        );
+
+    if(!container) return;
+
+    if(isPremiumUser()){
+
+        container.innerHTML = `
+
+            <div class="success-box-animated">
+
+                <i class="fa-solid fa-circle-check"></i>
+
+                <h3>Premium Activated</h3>
+
+                <p>
+
+                    Welcome to Premium Mentorship
+
+                </p>
+
+                <button
+
+                    class="btn btn-primary btn-full"
+
+                    onclick="enterMentorshipRoom()">
+
+                    Open Dashboard
+
+                </button>
+
+            </div>
+
         `;
 
+    }
 
-        setTimeout(() => {
-            closePaymentModal();
-            renderMentorshipPricingCard();
+    else{
 
-            targetBody.innerHTML = `
-                <button class="btn btn-primary btn-full" id="payment-trigger-btn" onclick="simulatePaymentProcessing()">
-                    <i class="fa-solid fa-credit-card"></i> Proceed to Payment
-                </button>
-            `;
-        }, 1500);
+        container.innerHTML = `
 
-    }, 2000);
+            <h3>
+
+                Premium Mentorship
+
+            </h3>
+
+            <div class="price-pill">
+
+                ₹59
+
+            </div>
+
+            <p>
+
+                Lifetime Access
+
+            </p>
+
+            <button
+
+                class="btn btn-primary btn-full"
+
+                onclick="buyPremium()">
+
+                Buy Now
+
+            </button>
+
+        `;
+
+    }
+
 }
 
+
+/*==========================================================
+                BUY PREMIUM
+==========================================================*/
+
+function buyPremium(){
+
+    if(!isLoggedIn()){
+
+        requireLogin(
+
+            ()=>{
+
+                openPaymentModal();
+
+            }
+
+        );
+
+        return;
+
+    }
+
+    openPaymentModal();
+
+}
+
+
+/*==========================================================
+            ENTER PREMIUM ROOM
+==========================================================*/
+
+function enterMentorshipRoom(){
+
+    showToast(
+
+        "Opening Mentorship Dashboard...",
+
+        "success"
+
+    );
+
+}
+
+
+/*==========================================================
+            PAYMENT
+==========================================================*/
+
+async function processPayment(){
+
+    try{
+
+        const payment =
+
+            await apiPost(
+
+                "/api/payment/create-order",
+
+                {
+
+                    amount:59
+
+                }
+
+            );
+
+        console.log(payment);
+
+        showToast(
+
+            "Payment Order Created",
+
+            "success"
+
+        );
+
+        launchPaymentGateway(payment);
+
+    }
+
+    catch(error){
+
+        console.error(error);
+
+        showToast(
+
+            "Payment Failed",
+
+            "error"
+
+        );
+
+    }
+
+}
+
+
+/*==========================================================
+            PAYMENT GATEWAY
+==========================================================*/
+
+function launchPaymentGateway(order){
+
+    /*
+        Razorpay Integration
+
+        Will be added later.
+
+        order.id
+
+        order.amount
+
+        order.currency
+
+    */
+
+    console.log(order);
+
+}
+
+
+/*==========================================================
+            PAYMENT SUCCESS
+==========================================================*/
+
+async function verifyPayment(
+
+    paymentId,
+
+    orderId,
+
+    signature
+
+){
+
+    try{
+
+        await apiPost(
+
+            "/api/payment/verify",
+
+            {
+
+                paymentId,
+
+                orderId,
+
+                signature
+
+            }
+
+        );
+
+        localStorage.setItem(
+
+            "premium",
+
+            "true"
+
+        );
+
+        closePaymentModal();
+
+        renderMentorshipPricingCard();
+
+        showToast(
+
+            "Premium Activated",
+
+            "success"
+
+        );
+
+    }
+
+    catch(error){
+
+        console.error(error);
+
+    }
+
+}
+
+
+/*==========================================================
+            PAYMENT BUTTON
+==========================================================*/
+
+function simulatePaymentProcessing(){
+
+    processPayment();
+
+}
+/*==========================================================
+                TOAST NOTIFICATIONS
+==========================================================*/
 
 function showToast(message, type = "info") {
+
     const container = document.getElementById("toast-container");
+
+    if (!container) return;
+
     const toast = document.createElement("div");
-    toast.className = `toast ${type}`;
-    
-    let iconClass = "fa-solid fa-circle-info";
-    if (type === "success") iconClass = "fa-solid fa-circle-check";
-    
-    toast.innerHTML = `<i class="${iconClass}"></i> <span>${message}</span>`;
+
+    toast.className = "toast " + type;
+
+    let icon = "fa-circle-info";
+
+    switch (type) {
+
+        case "success":
+            icon = "fa-circle-check";
+            break;
+
+        case "error":
+            icon = "fa-circle-xmark";
+            break;
+
+        case "warning":
+            icon = "fa-triangle-exclamation";
+            break;
+
+        default:
+            icon = "fa-circle-info";
+    }
+
+    toast.innerHTML = `
+        <i class="fa-solid ${icon}"></i>
+        <span>${message}</span>
+    `;
+
     container.appendChild(toast);
-    
 
     setTimeout(() => {
-        toast.style.opacity = "0";
-        toast.style.transform = "translateX(50px)";
-        setTimeout(() => { toast.remove(); }, 300);
-    }, 3500);
+
+        toast.classList.add("show");
+
+    }, 100);
+
+    setTimeout(() => {
+
+        toast.classList.remove("show");
+
+        setTimeout(() => {
+
+            toast.remove();
+
+        }, 300);
+
+    }, 3000);
+
 }
+
+
+/*==========================================================
+                LOADING UTILITIES
+==========================================================*/
+
+function showLoader() {
+
+    const loader = document.getElementById("loader");
+
+    if (!loader) return;
+
+    loader.classList.remove("hidden");
+
+    loader.style.opacity = "1";
+
+}
+
+
+function hideLoader() {
+
+    const loader = document.getElementById("loader");
+
+    if (!loader) return;
+
+    loader.style.opacity = "0";
+
+    setTimeout(() => {
+
+        loader.classList.add("hidden");
+
+    }, 300);
+
+}
+
+
+/*==========================================================
+                ERROR HANDLER
+==========================================================*/
+
+function handleApiError(error) {
+
+    console.error(error);
+
+    if (error.message === "Unauthorized") {
+
+        showToast(
+
+            "Please login again.",
+
+            "warning"
+
+        );
+
+        return;
+
+    }
+
+    showToast(
+
+        "Something went wrong.",
+
+        "error"
+
+    );
+
+}
+
+
+/*==========================================================
+                EMPTY STATE
+==========================================================*/
+
+function showEmptyState(message) {
+
+    const grid = document.getElementById(
+
+        "resources-cards-grid"
+
+    );
+
+    if (!grid) return;
+
+    grid.innerHTML = `
+
+        <div class="empty-box">
+
+            <i class="fa-solid fa-folder-open"></i>
+
+            <h3>No Resources</h3>
+
+            <p>${message}</p>
+
+        </div>
+
+    `;
+
+}
+
+
+/*==========================================================
+            COPY TO CLIPBOARD
+==========================================================*/
+
+function copyText(text) {
+
+    navigator.clipboard.writeText(text)
+
+        .then(() => {
+
+            showToast(
+
+                "Copied",
+
+                "success"
+
+            );
+
+        })
+
+        .catch(() => {
+
+            showToast(
+
+                "Copy Failed",
+
+                "error"
+
+            );
+
+        });
+
+}
+
+
+/*==========================================================
+                FORMAT DATE
+==========================================================*/
+
+function formatDate(dateString) {
+
+    const date = new Date(dateString);
+
+    return date.toLocaleDateString(
+
+        "en-IN",
+
+        {
+
+            day: "2-digit",
+
+            month: "short",
+
+            year: "numeric"
+
+        }
+
+    );
+
+}
+
+
+/*==========================================================
+                FILE DOWNLOAD
+==========================================================*/
+
+function downloadFile(url) {
+
+    window.open(
+
+        url,
+
+        "_blank"
+
+    );
+
+}
+
+
+/*==========================================================
+            ESC KEY CLOSE MODALS
+==========================================================*/
+
+document.addEventListener(
+
+    "keydown",
+
+    event => {
+
+        if (event.key !== "Escape") {
+
+            return;
+
+        }
+
+        closeAuthModal();
+
+        closePaymentModal();
+
+    }
+
+);
+
+
+/*==========================================================
+        CLICK OUTSIDE TO CLOSE MODALS
+==========================================================*/
+
+window.addEventListener(
+
+    "click",
+
+    event => {
+
+        const authModal =
+
+            document.getElementById(
+
+                "auth-modal"
+
+            );
+
+        const paymentModal =
+
+            document.getElementById(
+
+                "payment-modal"
+
+            );
+
+        if (
+
+            event.target === authModal
+
+        ) {
+
+            closeAuthModal();
+
+        }
+
+        if (
+
+            event.target === paymentModal
+
+        ) {
+
+            closePaymentModal();
+
+        }
+
+    }
+
+);
+
+
+/*==========================================================
+            GLOBAL FETCH WRAPPER
+==========================================================*/
+
+async function executeRequest(request) {
+
+    try {
+
+        showLoader();
+
+        const result = await request();
+
+        hideLoader();
+
+        return result;
+
+    }
+
+    catch (error) {
+
+        hideLoader();
+
+        handleApiError(error);
+
+        throw error;
+
+    }
+
+}
+
+
+/*==========================================================
+                INITIAL BACKEND CHECK
+==========================================================*/
+
+window.addEventListener(
+
+    "load",
+
+    () => {
+
+        console.log(
+
+            "SemesterX Frontend Loaded"
+
+        );
+
+        if (isLoggedIn()) {
+
+            testBackendConnection();
+
+        }
+
+    }
+
+);
+
+
+/*==========================================================
+                    END OF FILE
+==========================================================*/
