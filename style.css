@@ -544,11 +544,20 @@ body {
 }
 .modal-overlay.open { opacity: 1; visibility: visible; }
 .modal-card {
-    background: var(--bg-surface); width: 100%; max-width: 440px;
-    border-radius: var(--radius-lg); padding: 40px 32px; box-shadow: 0 20px 50px -12px rgba(0,0,0,0.3);
-    position: relative; transform: scale(0.95); transition: transform 0.3s ease;
+    background: var(--bg-surface);
+    width: 100%;
+    max-width: 440px;
+    border-radius: var(--radius-lg);
+    padding: 40px 32px;
+    box-shadow: 0 20px 50px -12px rgba(0,0,0,0.3);
+    position: relative;
+    transform: translateY(25px) scale(0.95);
+    transition: transform 0.3s ease;
 }
-.modal-overlay.open .modal-card { transform: scale(1); }
+
+.modal-overlay.open .modal-card {
+    transform: translateY(25px) scale(1);
+}
 .close-modal-btn {
     position: absolute; top: 20px; right: 24px; background: none; border: none;
     font-size: 28px; color: var(--text-secondary); cursor: pointer;
