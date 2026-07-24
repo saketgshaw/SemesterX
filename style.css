@@ -568,12 +568,13 @@ body {
     padding: 40px 32px;
     box-shadow: 0 20px 50px -12px rgba(0,0,0,0.3);
     position: relative;
-    transform: translateY(40px) scale(0.95);
+
+    transform: scale(0.95);
     transition: transform 0.3s ease;
 }
 
 .modal-overlay.open .modal-card {
-    transform: translateY(40px) scale(1);
+    transform: scale(1);
 }
 
 .close-modal-btn {
